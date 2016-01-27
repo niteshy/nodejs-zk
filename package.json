@@ -1,0 +1,34 @@
+{
+  "name": "nodejs-zk",
+  "version": "0.0.1",
+  "description": "Nodejs zk wrapper over node-zeekeeper-client ",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "mkdirp": "^0.5.1",
+    "nconf": "^0.6.9",
+    "node-zookeeper-client": "^0.2.2",
+    "underscore": "^1.8.3",
+    "winston": "0.7.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/niteshy/nodejs-zk.git"
+  },
+  "keywords": [
+    "zookeeper",
+    "node"
+  ],
+  "author": "Nitesh Yadav",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/niteshy/nodejs-zk/issues"
+  },
+  "homepage": "https://github.com/niteshy/nodejs-zk"
+}
