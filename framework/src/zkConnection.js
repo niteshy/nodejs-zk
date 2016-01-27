@@ -15,8 +15,8 @@ function init(opts, cb) {
     }
     var options = _.defaults(opts, {sessionTimeout: SESSION_TIMEOUT});
     log.debug("using options", options);
-    zclient = zookeeper.createClient(process.env.DENIM_ZOOKEEPER_HOSTS, opts);
-    log.info("Zookeeper:%s: connecting to hosts - ", sessionId(), process.env.DENIM_ZOOKEEPER_HOSTS);
+    zclient = zookeeper.createClient(process.env.ZOOKEEPER_HOSTS, opts);
+    log.info("Zookeeper:%s: connecting to hosts - ", sessionId(), process.env.ZOOKEEPER_HOSTS);
 
     zclient.once('connected', function() {
         log.info('Zookeeper:%s: connected negotiated timeout sessionTimeout = %d', sessionId(), zclient.getSessionTimeout());

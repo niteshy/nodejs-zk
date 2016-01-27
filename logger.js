@@ -11,7 +11,7 @@ if (process.env.LOG_CONSOLE === "true") {
     log.add(winston.transports.Console);
 } else {
     log.add(winston.transports.DailyRotateFile, {
-        filename: util.format('nodejs-zk.%s.', process.env.PORT || 8000),
+        filename: util.format('nodejs-zk.%s', process.env.MY_PORT),
         dirname: log_dir,
         json: false,
         maxsize: 102400000, /* 100 mb */

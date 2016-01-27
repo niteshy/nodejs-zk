@@ -5,8 +5,7 @@ var config  = require("../config");
 var log     = require("../logger");
 var zkConnection = require("../framework/src/zkConnection");
 
-process.env.DENIM_ZOOKEEPER_HOSTS = config.get("DENIM_ZOOKEEPER_HOSTS");
-process.title = "NODE-ZK";
+process.title = "NODE-ZK:CON";
 
 var zkSetup = function(cb) {
     return zkConnection.init(function (err, zclient) {
