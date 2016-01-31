@@ -30,7 +30,7 @@ stats.nitems = 0;
 stats.success = [];
 stats.failed = [];
 
-var generateLoad = function(it, cb) {
+var addNodes = function(it, cb) {
     var items = _.range(1, perInterval+1);
 
     _.each(items, function(item, i) {
@@ -38,6 +38,32 @@ var generateLoad = function(it, cb) {
         var meetingId = reqId;
         stats.nitems++;
         meetingAwareDiscovery.addNodeToMeeting(reqId, meetingId, process.env.MY_NODE_IP, process.env.MY_PORT,
+            function (err) {
+                if (err) {
+                    log.error("%s - ZK meetingAwareRegistry add failed for meeting = %s, endpointGuid = %s, err = %s",
+                        reqId, meetingId, reqId, err);
+                    return stats.failed.push({"reqId": reqId, "meetingId": meetingId});
+                } else {
+                    log.info("%s - successfully added to meetingAwareRegistry for meeting = %s, endpointGuid = %s",
+                        reqId, meetingId, reqId);
+                    return stats.success.push({"reqId": reqId, "meetingId": meetingId});
+                }
+            }
+        );
+        if (i === (items.length - 1)) {
+            return _.isFunction(cb) ? cb(null): null;
+        }
+    });
+};
+
+var removeNodes = function(it, cb) {
+    var items = _.range(1, perInterval+1);
+
+    _.each(items, function(item, i) {
+        var reqId = it * (1000000 + item);
+        var meetingId = reqId;
+        stats.nitems++;
+        meetingAwareDiscovery.removeNodeFromMeeting(reqId, meetingId, process.env.MY_NODE_IP, process.env.MY_PORT,
             function (err) {
                 if (err) {
                     log.error("%s - ZK meetingAwareRegistry add failed for meeting = %s, endpointGuid = %s, err = %s",
@@ -73,6 +99,7 @@ var printStats = function () {
     str += "\t\t\t\t No. of failure = " + stats.failed.length + "\n";
     str += "\t\t\t\t *********************************************\n";
     log.info(str);
+    return null;
 };
 
 zkSetup(function(err, zclient) {
@@ -80,14 +107,14 @@ zkSetup(function(err, zclient) {
         return log.error("zkSetup: Could not able to connect zk, hence terminating test");
     } else {
         meetingAwareDiscovery = require('../framework/recipes/meetingAwareDiscovery')(zclient, {basePath: meetingAwarePath});
-        var i = 1;
+        var i = 1, j = 1;
         printTestLoad();
-        var timer = setInterval(function() {
-            generateLoad(i, function () {
+        var t1 = setInterval(function() {
+            addNodes(i, function () {
                 i++;
                 if (i === nInterval+1) {
-                    clearInterval(timer);
-                    setTimeout(printStats, 5000);
+                    clearInterval(t1);
+                    return setTimeout(printStats, 5000);
                 }
             });
         }, interval);

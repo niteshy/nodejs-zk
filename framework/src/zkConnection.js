@@ -11,7 +11,6 @@ function init(opts, cb) {
     if(_.isFunction(opts)) {
         cb = opts;
         opts = {};
-
     }
     var options = _.defaults(opts, {sessionTimeout: SESSION_TIMEOUT});
     log.debug("using options", options);
@@ -44,20 +43,32 @@ function init(opts, cb) {
     // wait for the connected event to come. if it does not come in the specified period, just say we could not connect and let it fail
     setTimeout(function () {
         if(!isConnected()) {
-            cb("ZK connection timed out in "+ HEALTHCHECK_TIMEOUT + " ms");
+            log.error("Zookeeper:%s: connection timedout in %s ms", sessionId(), HEALTHCHECK_TIMEOUT);
+            return cb("ZK connection timed out in "+ HEALTHCHECK_TIMEOUT + " ms");
         }
     }, HEALTHCHECK_TIMEOUT);
 }
 
-
-function healthcheck(cb){
-    if(isConnected()) {
-        return cb(null, {state: zclient.getState(),
-                         sid: sessionId(),
-                         timeout: zclient.getSessionTimeout()
-                        });
-    }
-    return cb({state: zclient.getState(), disconnected: true});
+function healthcheck(cb) {
+    var serviceBasePath = '/bjn/'+ process.env.DENIM_PARTITION_NAME + '/seam/services';
+    var status = false;
+    // if zk getData failed to respond with HEALTHCHECK_TIMEOUT
+    var healthCheckTimeoutTimer = setTimeout(function () {
+        if (!status) {
+            var msg = "Zookeeper: healthCheck timeout";
+            log.error({state: zclient.getState() || "DISCONNECTED", disconnected: true, reason: msg});
+            return cb({state: zclient.getState() || "DISCONNECTED", disconnected: true, reason: msg});
+        }
+    }, HEALTHCHECK_TIMEOUT);
+    zclient.getData(serviceBasePath, function (err, data, stat) {
+        clearTimeout(healthCheckTimeoutTimer);
+        if (err || !data) {
+            var errmsg = "Zookeeper: healthCheck failed to read services node data, err - " + err;
+            log.error({state: zclient.getState() || "DISCONNECTED", disconnected: true, reason: msg});
+            return cb({state: zclient.getState() || "DISCONNECTED", disconnected: true, reason: msg});
+        }
+        return cb(null, {state: zclient.getState(), sid: sessionId(), sessionTimeout: zclient.getSessionTimeout()});
+    });
 }
 
 function isConnected() {
@@ -66,6 +77,7 @@ function isConnected() {
         state === zookeeper.State.CONNECTED ||
         state === zookeeper.State.SASL_AUTHENTICATED;
 }
+
 function sessionId() {
     var sid = zclient.getSessionId();
     if(sid) {
@@ -73,6 +85,7 @@ function sessionId() {
     }
     return "No SessionId";
 }
+
 function getState() {
     return zclient.getState();
 }
