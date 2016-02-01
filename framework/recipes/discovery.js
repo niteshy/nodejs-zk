@@ -1,14 +1,14 @@
 "use strict";
-var log = require('../logger');
+var log = require('../../logger');
 var zookeeper = require('node-zookeeper-client');
 var _ = require('underscore');
 var util = require('util');
-var zk = require('../src/zk');
-var zkPath = require('./zkPath');
+var zk = require('../src/zkConnection');
+var zkPath = require('../lib/zkPath');
 
 module.exports = function (zclient, opts) {
-    var zklib = require('./zklib')(zclient);
-    var options = _.defaults( opts || {}, {basePath:'/bjn/seam/services'});
+    var zklib = require('../src/zklib')(zclient);
+    var options = _.defaults( opts || {}, {basePath:'/bjn/live/seam/services'});
     var services = null;
 
     zklib.watchAllChildren(options.basePath, {}, function(event) {
