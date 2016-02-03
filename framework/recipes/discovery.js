@@ -11,12 +11,6 @@ module.exports = function (zclient, opts) {
     var options = _.defaults( opts || {}, {basePath:'/bjn/live/seam/services'});
     var services = null;
 
-    zklib.watchAllChildren(options.basePath, {}, function(event) {
-        log.info('Got event', event);
-    }).then(function(s) {
-        services = s;
-    });
-
     var discovery = {
         // persistent servicepath but ephemeral path for the service
         // also reregisters on zk exipiration.
@@ -66,6 +60,11 @@ module.exports = function (zclient, opts) {
                              }
                              return log.info("successfully resored event service on zookeeper reconnect");
                          });
+                     });
+                     zklib.watchAllChildren(options.basePath, {}, function(event) {
+                         log.info('Got event', event);
+                     }).then(function(s) {
+                         services = s;
                      });
                      return cb(err, res);
                 });
