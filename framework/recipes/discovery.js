@@ -3,13 +3,16 @@ var log = require('../../logger');
 var zookeeper = require('node-zookeeper-client');
 var _ = require('underscore');
 var util = require('util');
-var zk = require('../src/zkConnection');
+var zk = require('../src/zk');
 var zkPath = require('../lib/zkPath');
 
-module.exports = function (zclient, opts) {
-    var zklib = require('../src/zklib')(zclient);
-    var options = _.defaults( opts || {}, {basePath:'/bjn/live/seam/services'});
+
+module.exports = function (zkWrapper, opts) {
+    var zklib = require('../src/zklib')(zkWrapper);
+    var options = _.defaults( opts || {}, {basePath:'/bjn/' + process.env.DENIM_PARTITION_NAME + '/seam/services'});
     var services = null;
+
+
 
     var discovery = {
         // persistent servicepath but ephemeral path for the service
@@ -19,7 +22,7 @@ module.exports = function (zclient, opts) {
             discovery.selfPath = servicePath + '/' + ip + ':'+ port;
 
             var createServiceNode = function createServiceNode(cb) {
-                return zclient.create(discovery.selfPath, new Buffer(JSON.stringify({
+                return zkWrapper.zclient.create(discovery.selfPath, new Buffer(JSON.stringify({
                     pid: process.pid,
                     url: util.format("http://%s:%s", ip, port)
                 })), zookeeper.CreateMode.EPHEMERAL, function(err) {
@@ -28,7 +31,7 @@ module.exports = function (zclient, opts) {
                     }
                     if (err && err.name === "NODE_EXISTS") {
                         log.info("Zookeeper: Node %s exists already, deleting and recreating.", discovery.selfPath);
-                        return zclient.remove(discovery.selfPath, function  (err, res) {
+                        return zkWrapper.zclient.remove(discovery.selfPath, function  (err, res) {
                             if(err) {
                                 log.warn("failed to remove existing self node.");
                                 return cb(err);
@@ -42,31 +45,32 @@ module.exports = function (zclient, opts) {
                 });
             };
 
-             return zclient.mkdirp(servicePath, new Buffer(ip), zookeeper.CreateMode.PERSISTENT, function(err) {
+            return zkWrapper.zclient.mkdirp(servicePath, new Buffer(ip), zookeeper.CreateMode.PERSISTENT, function(err) {
                 if (err && err.name !== "NODE_EXISTS") {
                     log.info('Zookeeper: failed to create node: %s due to: %s.', servicePath, err);
                     return cb(err);
                 }
-                 return createServiceNode(function (err, res) {
-                     if(err) {
-                         return cb(err);
-                     }
-                     // register the hook to add self back
-                     zclient.on('connected', function () {
-                         log.warn("The node had disconnected, but now that the connection is restored, we are registrering the service.");
-                         createServiceNode(function (err, res) {
-                             if(err) {
-                                 return log.error("Failed to restore event service on zookeeper reconnect");
-                             }
-                             return log.info("successfully resored event service on zookeeper reconnect");
-                         });
-                     });
-                     zklib.watchAllChildren(options.basePath, {}, function(event) {
-                         log.info('Got event', event);
-                     }).then(function(s) {
-                         services = s;
-                     });
-                     return cb(err, res);
+                return createServiceNode(function (err, res) {
+                    if(err) {
+                        return cb(err);
+                    }
+                    // register the hook to add self back
+                    zkWrapper.on('SYNC_CONNECTED', function () {
+                        log.warn("Discovery: The node had disconnected, but now that the connection is restored, we are registrering the service.");
+                        createServiceNode(function (err, res) {
+                            if(err) {
+                                return log.error("Discovery: Failed to restore event service on zookeeper reconnect");
+                            }
+                            return log.info("Discovery: successfully restored event service on zookeeper reconnect");
+                        });
+                    });
+                    zklib.watchAllChildren(options.basePath, {}, function(event) {
+                        log.info('Got event', event);
+                    }).then(function(s) {
+                        log.info("watchAllChildren services = ", s);
+                        services = s;
+                    });
+                    return cb(err, res);
                 });
             });
 
@@ -82,7 +86,7 @@ module.exports = function (zclient, opts) {
             var serviceNode = _.find(services.children, function (s) {
                 return zkPath.childNode(s.path) === serviceName;
             });
-            log.info("Found ", serviceNode);
+            log.info("Discovery lookup Found ", serviceNode);
             var serviceNodeInstances = serviceNode ? serviceNode.children : [];
             if(!_.isEmpty(serviceNodeInstances)) {
                 return JSON.parse(serviceNodeInstances[_.random(serviceNodeInstances.length - 1)].data).url;

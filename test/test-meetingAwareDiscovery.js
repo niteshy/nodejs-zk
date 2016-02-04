@@ -5,23 +5,24 @@
 var _ = require("underscore");
 var config  = require("../config");
 var log     = require("../logger");
-var zkConnection = require("../framework/src/zkConnection");
+var zk = require("../framework/src/zk");
 
 process.title = "NODE-ZK";
 
 var meetingAwareDiscovery;
+var discoveryPath = "/bjn/test/seam/services";
 var meetingAwarePath = "/bjn/test/seam/meeting.services";
 var interval    = config.get("EXECUTION:INTERVAL");
 var perInterval = config.get("EXECUTION:PER_INTERVAL");
 var nInterval   = config.get("EXECUTION:N_INTERVAL");
 
 var zkSetup = function(cb) {
-    return zkConnection.init(function (err, zclient) {
+    return zk.init(function (err, zkWrapper) {
         if (err) {
             log.error("zkSetup: Failed to initialize zookeeper");
             return cb(err);
         }
-        return cb(null, zclient);
+        return cb(null, zkWrapper);
     });
 };
 
@@ -102,21 +103,38 @@ var printStats = function () {
     return null;
 };
 
-zkSetup(function(err, zclient) {
+
+var resources = {};
+
+zkSetup(function(err, zkWrapper) {
     if (err) {
         return log.error("zkSetup: Could not able to connect zk, hence terminating test");
     } else {
-        meetingAwareDiscovery = require('../framework/recipes/meetingAwareDiscovery')(zclient, {basePath: meetingAwarePath});
-        var i = 1, j = 1;
-        printTestLoad();
-        var t1 = setInterval(function() {
-            addNodes(i, function () {
-                i++;
-                if (i === nInterval+1) {
-                    clearInterval(t1);
-                    return setTimeout(printStats, 5000);
-                }
-            });
-        }, interval);
+
+        resources.zkWrapper = zkWrapper;
+        var discovery = require('../framework/recipes/discovery')(zkWrapper, {basePath: discoveryPath});
+        resources.discovery= discovery;
+        return discovery.registerService('event.service.addr', config.get("MY_NODE_IP"), config.get("MY_PORT"), function (err, selfPath) {
+            if(err) {
+                log.error("Failed to register event service into zookeeper");
+                return callback(err);
+            }
+            log.info("It's all been done");
+
+            meetingAwareDiscovery = require('../framework/recipes/meetingAwareDiscovery')(zkWrapper, {basePath: meetingAwarePath});
+            var i = 1, j = 1;
+            printTestLoad();
+            var t1 = setInterval(function() {
+                addNodes(i, function () {
+                    i++;
+                    if (i === nInterval+1) {
+                        clearInterval(t1);
+                        return setTimeout(printStats, 5000);
+                    }
+                });
+            }, interval);
+            return selfPath;
+        });
+
     }
 });

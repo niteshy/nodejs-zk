@@ -2,24 +2,26 @@
 
 var Promise = require('bluebird');
 var _ = require('underscore');
+var util = require('util');
 var zkPath = require('../lib/zkPath');
+var log = require("../../logger");
 
-module.exports = function(zclient) {
-    Promise.promisifyAll(zclient, {multiArgs: true});
+module.exports = function(zkWrapper) {
+    Promise.promisifyAll(zkWrapper.zclient, {multiArgs: true});
     var l = {
         rmr: function removeRecursive(path) {
             // patch the path and remove the leaves and go upward.
-            console.log("Removing root node", path);
-            return zclient.existsAsync(path).then(function (exists) {
+            log.info("Removing root node", path);
+            return zkWrapper.zclient.existsAsync(path).then(function (exists) {
                 if(exists) {
-                    return zclient.getChildrenAsync(path).spread(function (children, stats) {
-                        console.log(" the root", path, "has ", children);
+                    return zkWrapper.zclient.getChildrenAsync(path).spread(function (children, stats) {
+                        log.info(" the root", path, "has ", children);
                         return Promise.each(children, function (child) {
                             return removeRecursive(zkPath.join(path,child));
                         });
                     }).then(function removeRoot() {
-                        console.log("removing the root", path);
-                        return zclient.removeAsync(path);
+                        log.info("removing the root", path);
+                        return zkWrapper.zclient.removeAsync(path);
                     });
                 } else {
                     // nothing to be done.
@@ -28,11 +30,11 @@ module.exports = function(zclient) {
             });
         },
         getAndWatchNodeData: function (path, watcher, x) {
-            return zclient.getDataAsync(path, function  dataWatcher(event) {
-                console.log("data watcher for " + path);
+            return zkWrapper.zclient.getDataAsync(path, function  dataWatcher(event) {
+                log.info("data watcher for " + path);
                 if(event.name === 'NODE_DELETED') {
                     // no need to register the watch. Just get it out of the list
-                    console.log("node with " + event.path + " has been deleted removing from the list");
+                    log.info("node with " + event.path + " has been deleted removing from the list");
                     x.children = _.reject(x.children, function (c) {
                         return x.path === event.path;
                     });
@@ -53,8 +55,8 @@ module.exports = function(zclient) {
             });
         },
         getAndWatchNodeChildren: function (path, options, watcher, x) {
-            return zclient.getChildrenAsync(path, function childrenwatcher (event){
-                console.log("Children Watch", event);
+            return zkWrapper.zclient.getChildrenAsync(path, function childrenwatcher (event){
+                log.info("Children Watch", event);
                 if(event.name !== 'NODE_DELETED') {
                     l.getAndWatchNodeChildren(event.path, options, watcher, x);
                 }
@@ -63,15 +65,24 @@ module.exports = function(zclient) {
                 }
 
             }).get(0).map(function(child) {
-                return l.addSelfAndChildWatcher(zkPath.join(path, child), options, watcher);
+                return l.addSelfAndChildWatcher(zkPath.join(path, child), options, watcher)
+                    .catch(function(child) {
+                        log.warn("getAndWatchNodeChildren: failed to get child for ", child);
+                        return [];
+                    });
+            }).catch(function(err) {
+                log.error("getAndWatchNodeChildren: failed to get all children ", err);
+                return [];
             }).then(function (all) {
                 x.children = all;
             });
         },
+
         // this is not the same as get children and watch on the parent, it will actually get all children, and then apply
         // watcher on each of the children.
         // following options can be provided
-        // {times: 1, added: true, deleted: true, recursive: true} or {times: Infinity} this will keep watching the node/nodes forever. Default is once only(just like regular zookeeper watches)
+        // {times: 1, added: true, deleted: true, recursive: true} or {times: Infinity} this will keep watching the
+        // node/nodes forever. Default is once only(just like regular zookeeper watches)
         addSelfAndChildWatcher: function (path, options, onWatch) {
             var x = {path: path, data: null, children: []};
             return l.getAndWatchNodeData(path, onWatch, x)
@@ -85,8 +96,16 @@ module.exports = function(zclient) {
                 onWatch = options;
                 options = {times: 1};
             }
-            return l.addSelfAndChildWatcher(path, options, onWatch).tap(console.log);
+            var x = {path: path, data: null, children: []};
+            return Promise.join(l.addSelfAndChildWatcher(zkPath.join(path, "sp.addr"), options, onWatch),
+                l.addSelfAndChildWatcher(zkPath.join(path, "meetme.service.addr"), options, onWatch),
+                function (sp, meetme) {
+                    x.children.push(sp);
+                    x.children.push(meetme);
+                    //console.log("x ", x);
+                    return x;
+                });
         }
-     };
+    };
     return l;
 };

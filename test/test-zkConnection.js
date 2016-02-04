@@ -10,7 +10,10 @@ process.title = "NODE-ZK:CON";
 var zkSetup = function(cb) {
     return zkConnection.init(function (err, zclient) {
         if (err) {
-            log.error("Failed to initialize zookeeper");
+            log.error("Failed to initialize zookeeper, closing existing connection");
+            zkConnection.close();
+            log.error("initialize zkConnection");
+            zkConnection.init();
             return cb(err);
         }
         return cb(null, zclient);
@@ -18,4 +21,6 @@ var zkSetup = function(cb) {
 };
 
 
-zkSetup(function() {});
+zkSetup(function(err, zclient) {
+
+});
