@@ -27,7 +27,7 @@ module.exports = function (zkWrapper, options) {
                 if (err && err.name === "NODE_EXISTS") {
                     log.info(reqId, FNAME, "Node %s exists already, deleting and recreating.", meetingEventPath);
                     return zkWrapper.zclient.remove(meetingEventPath, function  (err, res) {
-                        if(err) {
+                        if (err && err.name !== "NO_NODE") {
                             log.error(reqId, FNAME, "failed to remove meeting discovery node: ", meetingEventPath, " due" +
                                 " to: ", err);
                             return cb(err);
